@@ -1,9 +1,6 @@
 import os
 import google.generativeai as genai
 from dotenv import load_dotenv
-import time
-import tempfile
-import io
 load_dotenv() 
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
@@ -26,107 +23,119 @@ chat_session = model.start_chat(
   ]
 )
 
-response = chat_session.send_message("INSERT_INPUT_HERE")
-print(response.text)
+# generates waveforms
+import numpy as np
+import scipy.io.wavfile as wavfile
 
+def generate_sine_wave(frequency, duration, sample_rate=44100):
+    t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+    waveform = 0.5 * np.sin(2 * np.pi * frequency * t)
+    return waveform
 
+def generate_square_wave(frequency, duration, sample_rate=44100):
+    t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+    waveform = 0.5 * np.sign(np.sin(2 * np.pi * frequency * t))
+    return waveform
 
-import mido
-import pygame
-import time
+def generate_triangle_wave(frequency, duration, sample_rate=44100):
+    t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+    waveform = 0.5 * (2 * np.abs(2 * (t * frequency - np.floor(t * frequency + 0.5))) - 1)
+    return waveform
 
-# Initialize pygame's mixer for MIDI playback
-pygame.mixer.init()
+def generate_sawtooth_wave(frequency, duration, sample_rate=44100):
+    t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+    waveform = 0.5 * (2 * (t * frequency - np.floor(t * frequency + 0.5)))
+    return waveform
 
-# Create a new MIDI file and a track
-midi = mido.MidiFile()
-track = mido.MidiTrack()
-midi.tracks.append(track)
+# apply effects
+def apply_gain(waveform, gain, sample_rate=44100):
+    waveform = np.clip(waveform * (10 ** (gain / 20)), -1, 1)
+    return waveform
 
-# Define the notes for a C major scale
-notes = [60, 62, 64, 65, 67, 69, 71, 72]  # C, D, E, F, G, A, B, C
+def apply_low_pass_filter(waveform, cutoff_freq, sample_rate=44100):
+    from scipy.signal import butter, lfilter
+    nyquist = 0.5 * sample_rate
+    normal_cutoff = cutoff_freq / nyquist
+    b, a = butter(1, normal_cutoff, btype='low', analog=False)
+    filtered_waveform = lfilter(b, a, waveform)
+    return filtered_waveform
 
-# Add notes to the track
-for note in notes:
-    track.append(mido.Message('note_on', note=note, velocity=64, time=480))
-    track.append(mido.Message('note_off', note=note, velocity=64, time=480))
+# create musical nodes
+def note_to_frequency(note):
+    # Simplified note-to-frequency conversion (A4=440Hz, A4 is the reference)
+    notes = {
+        'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13, 'E': 329.63,
+        'F': 349.23, 'F#': 369.99, 'G': 392.00, 'G#': 415.30, 'A': 440.00,
+        'A#': 466.16, 'B': 493.88
+    }
+    base_note, octave = note[:-1], int(note[-1])
+    frequency = notes[base_note] * (2 ** (octave - 4))
+    return frequency
 
-# Convert MIDI data to a playable format
-# Save the MIDI data to an in-memory file
-midi_data = io.BytesIO()
-midi.save(midi_data)
-midi_data.seek(0)  # Rewind the file-like object to the beginning
+def create_note_wave(note, duration, sample_rate=44100):
+    frequency = note_to_frequency(note)
+    waveform = generate_sine_wave(frequency, duration, sample_rate)
+    return waveform
 
-# Load and play the MIDI data
-pygame.mixer.music.load(midi_data)
-pygame.mixer.music.play()
+# save to wav file
+def save_wavefile(filename, waveform, sample_rate=44100):
+    waveform = np.int16(waveform * 32767)  # Convert waveform to 16-bit PCM format
+    wavfile.write(filename, sample_rate, waveform)
 
+# generate music sequence
+def generate_melody(notes, duration, sample_rate=44100):
+    melody = np.concatenate([create_note_wave(note, duration, sample_rate) for note in notes])
+    return melody
 
+def generate_bassline(notes, duration, sample_rate=44100):
+    bassline = np.concatenate([create_note_wave(note, duration, sample_rate) for note in notes])
+    return bassline
 
-# Wait for the playback to finish
-while pygame.mixer.music.get_busy():
-    time.sleep(1)
+# generate rhythm and precurursion
+def create_percussion_sound(sample, duration, sample_rate=44100):
+    sample_waveform = generate_sine_wave(sample, duration, sample_rate)
+    return sample_waveform
 
-print("Playback finished")
+def generate_drum_pattern(pattern, duration, sample_rate=44100):
+    drum_track = np.zeros(int(duration * sample_rate))
+    for hit in pattern:
+        start = int(hit[0] * sample_rate)
+        end = start + int(hit[1] * sample_rate)
+        drum_track[start:end] += create_percussion_sound(hit[2], hit[1], sample_rate)
+    return drum_track
 
-print("MIDI file saved as c_major_scale.mid")
+# combine tracks
+def mix_tracks(*tracks):
+    combined = np.zeros_like(tracks[0])
+    for track in tracks:
+        combined[:len(track)] += track
+    return np.clip(combined, -1, 1)
 
+tools = [generate_sine_wave, generate_square_wave, generate_triangle_wave, generate_sawtooth_wave, apply_gain, apply_low_pass_filter, note_to_frequency, create_note_wave, save_wavefile, generate_melody, generate_bassline, create_percussion_sound, generate_drum_pattern, mix_tracks]
+system_instruction="you are a music engine thats generates the melodies according to the users requirement"
 
+# Toggle this to switch between Gemini 1.5 with a system instruction, or Gemini 1.0 Pro.
+use_sys_inst = False
 
+model_name = 'gemini-1.5-flash' if use_sys_inst else 'gemini-1.0-pro'
 
+if use_sys_inst:
+  model = genai.GenerativeModel(
+      model_name, tools= tools, system_instruction=system_instruction)
+  convo = model.start_chat(enable_automatic_function_calling=True)
 
+else:
+  model = genai.GenerativeModel(model_name, tools=tools)
+  convo = model.start_chat(
+      history=[
+          {'role': 'user', 'parts': [system_instruction]},
+          {'role': 'model', 'parts': ['OK I understand. I will do my best!']}
+        ],
+      enable_automatic_function_calling=True)
 
+running = 1
+while running < 6:
+  def send_message(message):
+    return convo.send_message(message)
+  running+=1
 
-
-
-
-
-
-
-
-# # Configure the API key
-# genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-
-# # Define generation configuration
-# generation_config = {
-#     "temperature": 1,
-#     "top_p": 0.95,
-#     "top_k": 64,
-#     "max_output_tokens": 8192,
-#     "response_mime_type": "text/plain",
-# }
-
-# # Create the model
-# model = genai.GenerativeModel(
-#     model_name="gemini-1.5-flash",
-#     generation_config=generation_config,
-#     # safety_settings = Adjust safety settings
-#     # See https://ai.google.dev/gemini-api/docs/safety-settings
-# )
-
-# # Start a chat session
-# chat_session = model.start_chat(history=[])
-
-# # Function to handle user input and generate a response
-# def get_response(user_input=None, image_path=None):
-#     if image_path:
-#         # If an image is provided, process the image
-#         with open(image_path, "rb") as image_file:
-#             image_data = image_file.read()
-        
-#         # Send the image to the model and get a response
-#         response = chat_session.send_message(image=image_data)
-#     elif user_input:
-#         # If text input is provided, process the text
-#         response = chat_session.send_message(user_input)
-#     else:
-#         return "Please provide either text input or an image."
-
-#     return response.text
-
-# # Example usage
-# user_input = "Describe the content of the image."
-# image_path = "path/to/your/image.png"  # Set the image path if you want to send an image
-
-# response = get_response(user_input=user_input, image_path=image_path)
-# print(response)
