@@ -1,6 +1,10 @@
 import os
 import google.generativeai as genai
-
+from dotenv import load_dotenv
+import time
+import tempfile
+import io
+load_dotenv() 
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
 # Create the model
@@ -48,11 +52,16 @@ for note in notes:
     track.append(mido.Message('note_off', note=note, velocity=64, time=480))
 
 # Convert MIDI data to a playable format
-midi_data = midi.save(file=None)
+# Save the MIDI data to an in-memory file
+midi_data = io.BytesIO()
+midi.save(midi_data)
+midi_data.seek(0)  # Rewind the file-like object to the beginning
 
-# Play the MIDI data
-pygame.mixer.music.load(mido.MidiFile(file=midi_data))
+# Load and play the MIDI data
+pygame.mixer.music.load(midi_data)
 pygame.mixer.music.play()
+
+
 
 # Wait for the playback to finish
 while pygame.mixer.music.get_busy():
