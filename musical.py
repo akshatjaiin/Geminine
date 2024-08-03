@@ -1,4 +1,4 @@
-from cleaned import Instrument, ModifyAudio
+from instruments import Instrument, ModifyAudio
 import numpy as np
 import random
 
@@ -38,7 +38,7 @@ def create_retro_song():
     )
 
     # Export the final song
-    ModifyAudio.export_to_mp3('retro_song.mp3', combined_waveform, sample_rate)
+    ModifyAudio.export_to_mp3('retro42.mp3', combined_waveform, sample_rate)
 
 # Run the function to create the song
 create_retro_song()

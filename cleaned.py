@@ -3,6 +3,7 @@ import struct
 import sys
 import numpy as np
 import pyaudio
+from pydub import AudioSegment
 from scipy.io import wavfile
 from scipy.signal import butter, lfilter
 import random
@@ -202,11 +203,11 @@ class ModifyAudio:
         return lfilter(b, a, waveform)
 
     @staticmethod
-    def generate_random_melody(num_notes: int = 10, min_freq: float = 261.63, max_freq: float = 523.25, duration: float = 0.5, sample_rate: int = 44100) -> np.ndarray:
+    def generate_random_melody(self, num_notes: int = 10, min_freq: float = 261.63, max_freq: float = 523.25, duration: float = 0.5, sample_rate: int = 44100) -> np.ndarray:
         melody = np.array([])
         for _ in range(num_notes):
             frequency = random.uniform(min_freq, max_freq)
-            note = ModifyAudio.generate_sine_wave(frequency, duration, sample_rate)
+            note = self.generate_sine_wave(frequency, duration, sample_rate)
             melody = np.concatenate((melody, note))
         return melody
 

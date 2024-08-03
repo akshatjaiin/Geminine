@@ -27,7 +27,6 @@ class Instrument:
         :play_time: Total time for which the sample has been recorded.
     """
     def __init__(self, bit_rate: int = 44100, no_play: bool = False):
-
         self._BITRATE = bit_rate
         self.no_play = no_play
 
@@ -49,55 +48,43 @@ class Instrument:
         if not isinstance(value, np.ndarray):
             raise TypeError("Sample must be a numpy array")
         self._sample = value
+
     @staticmethod
     def get_hz(key_number: int) -> float:
-        """
-        Get frequency of the key via its key number.
-
-        :return: frequency of the key.
-        """
         return 2 ** ((key_number - 49) / 12) * 440
 
     def record_key(self, key: int, duration: float) -> None:
-        """
-        Adds the key in the sample.
-
-        :param key: The key number of the key's name.
-        :param duration: Time for which the key it to be played.
-        :return: None
-        """
         key_hz = self.get_hz(key)
         reciprocal_hz = 1 / key_hz
-        # making sure the wave ends and starts at maxima.
-        phase_completer = reciprocal_hz*(round(key_hz*duration) + 0.25) - duration
-        t = np.linspace(0.25*reciprocal_hz, duration + phase_completer, round(self._BITRATE * duration))
-        # sinusoidal waves are a function of sine with args 2*pi*frequency*t.
+        phase_completer = reciprocal_hz * (round(key_hz * duration) + 0.25) - duration
+        t = np.linspace(0.25 * reciprocal_hz, duration + phase_completer, round(self._BITRATE * duration))
         time = t + self.play_time
         wave = np.sin(2 * np.pi * key_hz * t)
 
         self.graphing_sample.append((key, time, wave))
-
-        self.sample = np.concatenate((self.sample, wave))
+        self._sample = np.concatenate((self.sample, wave))
         self.total_time = np.concatenate((self.total_time, time))
-        self.play_time += duration + phase_completer - 0.25*reciprocal_hz + 1/round(self._BITRATE * duration)
-    
+        self.play_time += duration + phase_completer - 0.25 * reciprocal_hz + 1 / round(self._BITRATE * duration)
     def record_chord(self, chords: Iterable, duration: float) -> None:
         """
-        Adds the given chords in the sample.
+        Adds the given chords to the sample.
 
-        :param chords: The iterable of chords that you want to play at same time.
+        :param chords: The iterable of chords that you want to play at the same time. Each chord can be a single note (int) or a list/tuple of notes.
         :param duration: Duration of each chord.
         """
-        sinusoidal_superposition = np.empty((int(self._BITRATE * duration)))
+        sinusoidal_superposition = np.zeros(int(self._BITRATE * duration))
         max_phase_completer = 0
         max_initial_deflection = 0
+
         for chord in chords:
+            if isinstance(chord, int):
+                chord = [chord]  # Treat a single int as a chord with one note
             for key in chord:
                 key_hz = self.get_hz(key)
                 reciprocal_hz = 1 / key_hz
-                # making sure the wave ends and starts at maxima.
+                # Making sure the wave ends and starts at maxima.
                 phase_completer = reciprocal_hz * (round(key_hz * duration) + 0.25) - duration
-                initial_deflection = 0.25*reciprocal_hz
+                initial_deflection = 0.25 * reciprocal_hz
                 t = np.linspace(initial_deflection, duration + phase_completer, int(self._BITRATE * duration))
                 sinusoidal_superposition += np.sin(2 * np.pi * key_hz * t)
 
@@ -106,16 +93,16 @@ class Instrument:
                 if phase_completer > max_phase_completer:
                     max_phase_completer = phase_completer
 
-        # keeping it in a range of [-1 , 1]
-        sinusoidal_superposition = sinusoidal_superposition / sinusoidal_superposition.max()
+        # Keeping it in a range of [-1 , 1]
+        sinusoidal_superposition /= np.abs(sinusoidal_superposition).max()
 
         t = np.linspace(max_initial_deflection, duration + max_phase_completer, int(self._BITRATE * duration))
-        time = t+self.play_time
+        time = t + self.play_time
         self.graphing_sample.append((tuple(chords), time, sinusoidal_superposition))
-        self.sample = np.concatenate((self.sample, sinusoidal_superposition))
+        self._sample = np.concatenate((self.sample, sinusoidal_superposition))
 
         self.total_time = np.concatenate((self.total_time, time))
-        self.play_time += duration + max_phase_completer - max_initial_deflection + 1/round(self._BITRATE * duration)
+        self.play_time += duration + max_phase_completer - max_initial_deflection + 1 / round(self._BITRATE * duration)
 
     def record_drum(self, drum_sample: np.ndarray, duration: float) -> None:
         """
@@ -646,14 +633,18 @@ class ModifyAudio:
         :param sample_rate: Number of samples per second (Hz). Default is 44100.
         :return: PyDub AudioSegment.
         """
-        waveform = np.int16(waveform * 32767)
-        audio_segment = AudioSegment(
-            waveform.tobytes(), 
+        if not isinstance(waveform, np.ndarray):
+            raise TypeError("Waveform must be a numpy array")
+        if waveform.dtype != np.int16:
+            waveform = waveform.astype(np.int16)
+
+        # Convert numpy array to AudioSegment
+        return AudioSegment(
+            waveform.tobytes(),
             frame_rate=sample_rate,
-            sample_width=waveform.dtype.itemsize, 
+            sample_width=waveform.dtype.itemsize,
             channels=1
         )
-        return audio_segment
 
     @staticmethod
     def export_to_mp3(filename: str, waveform: np.ndarray, sample_rate: int = 44100, bitrate: str = "192k") -> None:
@@ -666,8 +657,17 @@ class ModifyAudio:
         :param bitrate: The bitrate of the MP3 file. Default is "192k".
         :return: None
         """
-        audio_segment = ModifyAudio.numpy_to_pydub(waveform, sample_rate)
-        audio_segment.export(filename, format="mp3", bitrate=bitrate)
+        try:
+            # Convert the waveform to a pydub AudioSegment
+            audio_segment = ModifyAudio.numpy_to_pydub(waveform, sample_rate)
+
+            # Export the AudioSegment as an MP3 file
+            audio_segment.export(filename, format="mp3", bitrate=bitrate)
+
+            print(f"Successfully exported to {filename}")
+
+        except Exception as e:
+            print(f"An error occurred during export: {e}")
 
     @staticmethod
     def export_to_flac(filename: str, waveform: np.ndarray, sample_rate: int = 44100) -> None:
@@ -698,8 +698,8 @@ class ModifyAudio:
 
     # --- Utilities ---
 
-    @staticmethod
-    def combine_tracks(track1: np.ndarray, track2: np.ndarray, sample_rate: int = 44100) -> np.ndarray:
+    @staticmethod         
+    def combine_tracks(track1: np.ndarray, track2: np.ndarray) -> np.ndarray:
         """
         Combines two waveforms into one by averaging their values.
 
@@ -708,10 +708,15 @@ class ModifyAudio:
         :param sample_rate: The sample rate of the audio. Default is 44100.
         :return: Combined waveform as a numpy array.
         """
+        max_len = max(len(track1), len(track2))
+        
+        if len(track1) < max_len:
+            track1 = np.pad(track1, (0, max_len - len(track1)), 'constant')
+        if len(track2) < max_len:
+            track2 = np.pad(track2, (0, max_len - len(track2)), 'constant')
+        
         combined = track1 + track2
-        if np.max(np.abs(combined)) == 0:
-            return None
-        return np.clip(combined / np.max(np.abs(combined)), -1, 1)
+        return combined
 
     @staticmethod
     def add_silence(waveform: np.ndarray, duration: float, sample_rate: int = 44100) -> np.ndarray:
