@@ -1,8 +1,13 @@
 import os
 import google.generativeai as genai
 from dotenv import load_dotenv
-load_dotenv() 
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+
+# Load environment variables
+load_dotenv()
+api_key = os.environ.get("GEMINI_API_KEY")
+if not api_key:
+    raise ValueError("API key not found. Please set GEMINI_API_KEY in your environment variables.")
+genai.configure(api_key=api_key)
 
 # Create the model
 generation_config = {
@@ -91,7 +96,7 @@ def generate_bassline(notes, duration, sample_rate=44100):
     bassline = np.concatenate([create_note_wave(note, duration, sample_rate) for note in notes])
     return bassline
 
-# generate rhythm and precurursion
+# generate rhythm and percussion
 def create_percussion_sound(sample, duration, sample_rate=44100):
     sample_waveform = generate_sine_wave(sample, duration, sample_rate)
     return sample_waveform
@@ -133,9 +138,10 @@ else:
         ],
       enable_automatic_function_calling=True)
 
-running = 1
-while running < 6:
-  def send_message(message):
+def send_message(message):
     return convo.send_message(message)
-  running+=1
 
+while True:
+    user_input = input("Enter your message: ")
+    response = send_message(user_input)
+    print(response)
