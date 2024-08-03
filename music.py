@@ -1,10 +1,14 @@
-from PyMusic_Instrument import Instrument
+from Instrument.Instrument import Instrument
 
-# Create an instrument instance
-piano = Instrument("piano")
+piano = Instrument(bit_rate = 44100)
+piano.record_key(52, duration=0.3)  # C5
+piano.record_chord([(52, 56, 61)], duration=0.3)  # C5 E5 A5
 
-# Generate a note (assuming the library has similar methods)
-note = piano.play("C4", duration=500)  # Play C4 note for 500 ms
+piano.play()
+piano.close()   # Terminates PyAudio
 
-# Save or play the note
-note.export("piano_note.wav", format="wav")
+guitar = Instrument(44100)
+guitar.record_key(43, duration=3)  # A
+guitar.play()
+guitar.clear_sample()  # clears the sample
+guitar.close()
