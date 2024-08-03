@@ -224,7 +224,7 @@ class Instrument:
         """
         return self._sample
     
-class ModifyAudio:
+# class ModifyAudio:
     @staticmethod
     def generate_sine_wave(frequency: float, duration: float, sample_rate: int = 44100) -> np.ndarray:
         """
@@ -443,7 +443,7 @@ class ModifyAudio:
         wavfile.write(filename, sample_rate, waveform)
 
     @staticmethod
-    def generate_melody(notes: list[str], duration: float, wave_type: str = 'sine', sample_rate: int = 44100) -> np.ndarray:
+    def generate_melody(self, notes: list[str], duration: float, wave_type: str = 'sine', sample_rate: int = 44100) -> np.ndarray:
         """
         Generate a melody from a list of notes.
 
@@ -453,7 +453,7 @@ class ModifyAudio:
         :param sample_rate: Number of samples per second (Hz). Default is 44100.
         :return: Numpy array containing the generated melody.
         """
-        melody = np.concatenate([ModifyAudio.create_note_wave(note, duration, wave_type, sample_rate) for note in notes])
+        melody = np.concatenate([self.create_note_wave(note, duration, wave_type, sample_rate) for note in notes])
         return melody
 
     @staticmethod
@@ -647,7 +647,7 @@ class ModifyAudio:
         )
 
     @staticmethod
-    def export_to_mp3(filename: str, waveform: np.ndarray, sample_rate: int = 44100, bitrate: str = "192k") -> None:
+    def export_to_mp3(self, filename: str, waveform: np.ndarray, sample_rate: int = 44100, bitrate: str = "192k") -> None:
         """
         Exports the waveform to an MP3 file using PyDub.
 
@@ -659,7 +659,7 @@ class ModifyAudio:
         """
         try:
             # Convert the waveform to a pydub AudioSegment
-            audio_segment = ModifyAudio.numpy_to_pydub(waveform, sample_rate)
+            audio_segment = self.numpy_to_pydub(waveform, sample_rate)
 
             # Export the AudioSegment as an MP3 file
             audio_segment.export(filename, format="mp3", bitrate=bitrate)
@@ -670,7 +670,7 @@ class ModifyAudio:
             print(f"An error occurred during export: {e}")
 
     @staticmethod
-    def export_to_flac(filename: str, waveform: np.ndarray, sample_rate: int = 44100) -> None:
+    def export_to_flac(self, filename: str, waveform: np.ndarray, sample_rate: int = 44100) -> None:
         """
         Exports the waveform to a FLAC file using PyDub.
 
@@ -679,7 +679,7 @@ class ModifyAudio:
         :param sample_rate: The sample rate of the audio. Default is 44100.
         :return: None
         """
-        audio_segment = ModifyAudio.numpy_to_pydub(waveform, sample_rate)
+        audio_segment = self.numpy_to_pydub(waveform, sample_rate)
         audio_segment.export(filename, format="flac")
 
     @staticmethod
