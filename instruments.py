@@ -2,10 +2,10 @@ from collections.abc import Iterable
 import struct
 import sys
 import numpy as np
+from scipy.signal import butter, lfilter
 import pyaudio
 from scipy.io import wavfile
 from pydub import AudioSegment
-import random
 
 class PlayerNotInitialisedError(AttributeError):
     """
@@ -49,7 +49,7 @@ class Instrument:
             raise TypeError("Sample must be a numpy array")
         self._sample = value
 
-    def get_hz(key_number: int) -> float:
+    def get_hz(self, key_number: int) -> float:
         return 2 ** ((key_number - 49) / 12) * 440
 
     def record_key(self, key: int, duration: float, notes=None) -> None:
@@ -232,7 +232,7 @@ class Instrument:
         waveform = 0.5 * np.sin(2 * np.pi * frequency * t)
         return waveform
 
-    @staticmethod
+    
     def square_wave(self, frequency: float, duration: float, sample_rate: int = 44100) -> np.ndarray:
         """
         Generate a square wave.
@@ -378,7 +378,7 @@ class Instrument:
         bassline = np.concatenate([self.create_note_wave(note, duration, wave_type, sample_rate) for note in notes])
         return bassline
     
-    def apply_reverb(audio: np.ndarray, reverb_amount: float = 0.5, sample_rate: int = 44100) -> np.ndarray:
+    def apply_reverb(self, audio: np.ndarray, reverb_amount: float = 0.5, sample_rate: int = 44100) -> np.ndarray:
         """
         Apply reverb effect to an audio signal.
 
@@ -405,7 +405,7 @@ class Instrument:
         sample_waveform = self.generate_sine_wave(sample, duration, sample_rate)
         return sample_waveform
 
-    @staticmethod
+    
     def generate_drum_pattern(self, pattern: list[tuple[float, float, float]], duration: float, sample_rate: int = 44100) -> np.ndarray:
         """
         Generate a drum pattern based on a list of hits.
@@ -469,7 +469,7 @@ class Instrument:
         indices = indices[indices < len(waveform)].astype(int)
         return waveform[indices]
 
-    @staticmethod
+    
     def numpy_to_pydub(self, waveform: np.ndarray, sample_rate: int = 44100) -> AudioSegment:
         """
         Converts a numpy waveform to a PyDub AudioSegment.
@@ -491,7 +491,6 @@ class Instrument:
             channels=1
         )
 
-    @staticmethod         
     def combine_tracks(self, track1: np.ndarray, track2: np.ndarray) -> np.ndarray:
         """
         Combines two waveforms into one by averaging their values.
@@ -511,7 +510,7 @@ class Instrument:
         combined = track1 + track2
         return combined
 
-    @staticmethod
+    
     def add_silence(self, waveform: np.ndarray, duration: float, sample_rate: int = 44100) -> np.ndarray:
         """
         Adds silence to the beginning and end of the waveform.
@@ -524,7 +523,7 @@ class Instrument:
         silence = np.zeros(int(sample_rate * duration))
         return np.concatenate((silence, waveform, silence))
 
-    @staticmethod
+    
     def mix_tracks_pydub(self, *tracks: AudioSegment) -> AudioSegment:
 
         """
