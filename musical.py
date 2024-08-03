@@ -1,4 +1,4 @@
-from instruments import Instrument, ModifyAudio
+from cleaned import Instrument, ModifyAudio
 import numpy as np
 import random
 

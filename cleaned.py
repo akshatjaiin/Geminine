@@ -4,30 +4,20 @@ import sys
 import numpy as np
 import pyaudio
 from scipy.io import wavfile
-from pydub import AudioSegment
+from scipy.signal import butter, lfilter
 import random
 
 class PlayerNotInitialisedError(AttributeError):
     """
-    Test
+    Custom error for uninitialized player.
     """
     pass
 
-
 class Instrument:
     """
-    Can play any piano notes, you have to input the key number for corresponding frequencies.
-
-    :param bit_rate: Generally value of bit rate is 44100 or 48000, it is proportional to wavelength of frequency generated.
-    :param no_play: Use this if you don't want to play the sample but use it for other purposes.
-
-    Attributes:
-        :graphing_sample: Used for graphing see the usage page.
-        :total_time: Numpy array representing time at split seconds.
-        :play_time: Total time for which the sample has been recorded.
+    Class for playing and recording different musical instruments.
     """
     def __init__(self, bit_rate: int = 44100, no_play: bool = False):
-
         self._BITRATE = bit_rate
         self.no_play = no_play
 
@@ -49,55 +39,34 @@ class Instrument:
         if not isinstance(value, np.ndarray):
             raise TypeError("Sample must be a numpy array")
         self._sample = value
+
     @staticmethod
     def get_hz(key_number: int) -> float:
-        """
-        Get frequency of the key via its key number.
-
-        :return: frequency of the key.
-        """
         return 2 ** ((key_number - 49) / 12) * 440
 
     def record_key(self, key: int, duration: float) -> None:
-        """
-        Adds the key in the sample.
-
-        :param key: The key number of the key's name.
-        :param duration: Time for which the key it to be played.
-        :return: None
-        """
         key_hz = self.get_hz(key)
         reciprocal_hz = 1 / key_hz
-        # making sure the wave ends and starts at maxima.
-        phase_completer = reciprocal_hz*(round(key_hz*duration) + 0.25) - duration
-        t = np.linspace(0.25*reciprocal_hz, duration + phase_completer, round(self._BITRATE * duration))
-        # sinusoidal waves are a function of sine with args 2*pi*frequency*t.
+        phase_completer = reciprocal_hz * (round(key_hz * duration) + 0.25) - duration
+        t = np.linspace(0.25 * reciprocal_hz, duration + phase_completer, round(self._BITRATE * duration))
         time = t + self.play_time
         wave = np.sin(2 * np.pi * key_hz * t)
 
         self.graphing_sample.append((key, time, wave))
-
         self.sample = np.concatenate((self.sample, wave))
         self.total_time = np.concatenate((self.total_time, time))
-        self.play_time += duration + phase_completer - 0.25*reciprocal_hz + 1/round(self._BITRATE * duration)
+        self.play_time += duration + phase_completer - 0.25 * reciprocal_hz + 1 / round(self._BITRATE * duration)
     
     def record_chord(self, chords: Iterable, duration: float) -> None:
-        """
-        Adds the given chords in the sample.
-
-        :param chords: The iterable of chords that you want to play at same time.
-        :param duration: Duration of each chord.
-        """
-        sinusoidal_superposition = np.empty((int(self._BITRATE * duration)))
+        sinusoidal_superposition = np.empty(int(self._BITRATE * duration))
         max_phase_completer = 0
         max_initial_deflection = 0
         for chord in chords:
             for key in chord:
                 key_hz = self.get_hz(key)
                 reciprocal_hz = 1 / key_hz
-                # making sure the wave ends and starts at maxima.
                 phase_completer = reciprocal_hz * (round(key_hz * duration) + 0.25) - duration
-                initial_deflection = 0.25*reciprocal_hz
+                initial_deflection = 0.25 * reciprocal_hz
                 t = np.linspace(initial_deflection, duration + phase_completer, int(self._BITRATE * duration))
                 sinusoidal_superposition += np.sin(2 * np.pi * key_hz * t)
 
@@ -106,21 +75,17 @@ class Instrument:
                 if phase_completer > max_phase_completer:
                     max_phase_completer = phase_completer
 
-        # keeping it in a range of [-1 , 1]
-        sinusoidal_superposition = sinusoidal_superposition / sinusoidal_superposition.max()
+        sinusoidal_superposition /= sinusoidal_superposition.max()
 
         t = np.linspace(max_initial_deflection, duration + max_phase_completer, int(self._BITRATE * duration))
-        time = t+self.play_time
+        time = t + self.play_time
         self.graphing_sample.append((tuple(chords), time, sinusoidal_superposition))
         self.sample = np.concatenate((self.sample, sinusoidal_superposition))
 
         self.total_time = np.concatenate((self.total_time, time))
-        self.play_time += duration + max_phase_completer - max_initial_deflection + 1/round(self._BITRATE * duration)
+        self.play_time += duration + max_phase_completer - max_initial_deflection + 1 / round(self._BITRATE * duration)
 
     def record_drum(self, drum_sample: np.ndarray, duration: float) -> None:
-        """
-        Adds the drum sample in the sample.
-        """
         t = np.linspace(0, duration, int(self._BITRATE * duration))
         drum_wave = np.interp(t, np.linspace(0, duration, len(drum_sample)), drum_sample)
         self._sample = np.concatenate((self._sample, drum_wave))
@@ -128,17 +93,8 @@ class Instrument:
         self.play_time += duration
 
     def record_flute(self, frequency: float, duration: float) -> None:
-        """
-        Adds a flute-like sound to the sample.
-
-        :param frequency: Frequency of the flute note.
-        :param duration: Duration of the flute note.
-        """
         t = np.linspace(0, duration, int(self._BITRATE * duration), endpoint=False)
-        # Generate a sine wave as a base
         sine_wave = np.sin(2 * np.pi * frequency * t)
-
-        # Apply a simple envelope to simulate a flute's sound, with an attack and decay
         attack_time = 0.1
         decay_time = 0.1
         sustain_level = 0.7
@@ -149,19 +105,13 @@ class Instrument:
         envelope[(t >= attack_time) & (t < (duration - decay_time))] = 1
         envelope[(t >= (duration - decay_time))] = sustain_level + (1 - sustain_level) * (duration - t[t >= (duration - decay_time)]) / release_time
 
-        # Apply the envelope to the sine wave
         flute_wave = sine_wave * envelope
-
-        # Normalize and add to sample
         self._sample = np.concatenate((self._sample, flute_wave))
         t += self.play_time
         self.total_time = np.concatenate((self.total_time, t))
         self.play_time += duration
             
     def play(self) -> None:
-        """
-        Plays the sample.
-        """
         if self.no_play:
             raise PlayerNotInitialisedError("Player not initialised")
         parsed_sample = self.sample.astype(np.float32)
@@ -172,46 +122,30 @@ class Instrument:
                                 frames_per_buffer=512)
 
         stream.write(parsed_sample.tobytes())
-
         stream.stop_stream()
         stream.close()
 
     def close(self) -> None:
-        """
-        Terminates PyAudio.
-        """
         if self.no_play:
             return
         self._player.terminate()
 
     def clear_sample(self) -> None:
-        """
-        Clears the sample.
-        """
         self._sample = np.array([])
 
     def to_wav(self, path: str) -> None:
-        """
-        Convert the sample to wav file format.
-
-        :param path: Path of the file where it will be written.
-        """
-        # headers for wav format http://www.topherlee.com/software/pcm-tut-wavformat.html
         header = b""
         header += b'RIFF'
-        # Leaving an empty space which will be left at the end.
         header += b'\x00\x00\x00\x00'
         header += b'WAVE'
         header += b"fmt "
         sample = self._sample.astype(np.float32)
 
-        fmt_chunk = struct.pack("<HHIIHH", 3, 1, self._BITRATE, self._BITRATE*4, 4, 32)
+        fmt_chunk = struct.pack("<HHIIHH", 3, 1, self._BITRATE, self._BITRATE * 4, 4, 32)
         fmt_chunk += b"\x00\x00"
 
         header += struct.pack('<I', len(fmt_chunk))
         header += fmt_chunk
-
-        # added this because it is a non-PCM file.
         header += b'fact'
         header += struct.pack('<II', 4, sample.shape[0])
 
@@ -224,280 +158,69 @@ class Instrument:
             sample = sample.byteswap()
 
         file.write(sample.tobytes())
-        # filling that empty space.
         size = file.tell()
         file.seek(4)
         file.write(struct.pack('<I', size - 8))
         file.close()
 
-    @property
-    def sample(self):
-        """
-        Numpy array containing sample data.
-        """
-        return self._sample
-    
 class ModifyAudio:
     @staticmethod
     def generate_sine_wave(frequency: float, duration: float, sample_rate: int = 44100) -> np.ndarray:
-        """
-        Generate a sine wave.
-
-        :param frequency: Frequency of the sine wave in Hz.
-        :param duration: Duration of the wave in seconds.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the sine wave.
-        """
         t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
         waveform = 0.5 * np.sin(2 * np.pi * frequency * t)
         return waveform
 
     @staticmethod
     def generate_square_wave(frequency: float, duration: float, sample_rate: int = 44100) -> np.ndarray:
-        """
-        Generate a square wave.
-
-        :param frequency: Frequency of the square wave in Hz.
-        :param duration: Duration of the wave in seconds.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the square wave.
-        """
         t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
         waveform = 0.5 * np.sign(np.sin(2 * np.pi * frequency * t))
         return waveform
 
     @staticmethod
     def generate_triangle_wave(frequency: float, duration: float, sample_rate: int = 44100) -> np.ndarray:
-        """
-        Generate a triangle wave.
-
-        :param frequency: Frequency of the triangle wave in Hz.
-        :param duration: Duration of the wave in seconds.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the triangle wave.
-        """
         t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
         waveform = 0.5 * (2 * np.abs(2 * (t * frequency - np.floor(t * frequency + 0.5))) - 1)
         return waveform
 
     @staticmethod
     def generate_sawtooth_wave(frequency: float, duration: float, sample_rate: int = 44100) -> np.ndarray:
-        """
-        Generate a sawtooth wave.
-
-        :param frequency: Frequency of the sawtooth wave in Hz.
-        :param duration: Duration of the wave in seconds.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the sawtooth wave.
-        """
         t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
         waveform = 0.5 * (2 * (t * frequency - np.floor(t * frequency + 0.5)))
         return waveform
-    
-
-    # --- Effects ---
 
     @staticmethod
     def apply_gain(waveform: np.ndarray, gain: float, sample_rate: int = 44100) -> np.ndarray:
-        """
-        Apply gain to the waveform.
-
-        :param waveform: Numpy array containing the waveform to which gain will be applied.
-        :param gain: Gain factor to be applied to the waveform. Must be a positive float.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the waveform with gain applied.
-        """
-        # Ensure gain is non-negative
         if gain < 0:
-            raise ValueError("Gain must be a non-negative value.")
-        
-        # Apply gain
-        waveform_with_gain = waveform * gain
-        
-        return waveform_with_gain
+            raise ValueError("Gain must be non-negative")
+        return waveform * gain
 
     @staticmethod
     def apply_low_pass_filter(waveform: np.ndarray, cutoff_freq: float, sample_rate: int = 44100) -> np.ndarray:
-        """
-        Apply a low-pass filter to the waveform.
-
-        :param waveform: Numpy array containing the waveform to be filtered.
-        :param cutoff_freq: Cutoff frequency for the low-pass filter in Hz.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the filtered waveform.
-        """
         nyquist = 0.5 * sample_rate
         normal_cutoff = cutoff_freq / nyquist
-        b, a = butter(1, normal_cutoff, btype='low', analog=False)
-        filtered_waveform = lfilter(b, a, waveform)
-        return filtered_waveform
+        b, a = butter(6, normal_cutoff, btype='low', analog=False)
+        return lfilter(b, a, waveform)
 
     @staticmethod
-    def note_to_frequency(note: str) -> float:
-        """
-        Convert a musical note to its corresponding frequency.
-
-        :param note: Musical note in the format 'NoteOctave' (e.g., 'A4', 'C#5').
-        :return: Frequency of the note in Hz.
-        :raises ValueError: If the note is not recognized.
-        """
-        notes = {
-            'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13, 'E': 329.63,
-            'F': 349.23, 'F#': 369.99, 'G': 392.00, 'G#': 415.30, 'A': 440.00,
-            'A#': 466.16, 'B': 493.88
-        }
-        base_note, octave = note[:-1], int(note[-1])
-        if base_note not in notes:
-            raise ValueError(f"Note '{base_note}' is not recognized.")
-        frequency = notes[base_note] * (2 ** (octave - 4))
-        return frequency
-    
-    @staticmethod
-    def create_note_wave(note: str, duration: float, wave_type: str = 'sine', sample_rate: int = 44100) -> np.ndarray:
-        """
-        Create a waveform for a single note.
-
-        :param note: Musical note in the format 'NoteOctave' (e.g., 'A4', 'C#5').
-        :param duration: Duration of the note in seconds.
-        :param wave_type: Type of waveform ('sine', 'square', 'triangle', 'sawtooth'). Default is 'sine'.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the waveform for the note.
-        :raises ValueError: If the wave_type is not recognized.
-        """
-        frequency = ModifyAudio.note_to_frequency(note)
-        if wave_type == 'sine':
-            waveform = ModifyAudio.generate_sine_wave(frequency, duration, sample_rate)
-        elif wave_type == 'square':
-            waveform = ModifyAudio.generate_square_wave(frequency, duration, sample_rate)
-        elif wave_type == 'triangle':
-            waveform = ModifyAudio.generate_triangle_wave(frequency, duration, sample_rate)
-        elif wave_type == 'sawtooth':
-            waveform = ModifyAudio.generate_sawtooth_wave(frequency, duration, sample_rate)
-        else:
-            raise ValueError(f"Wave type '{wave_type}' is not recognized.")
-        return waveform
-
-    @staticmethod
-    def save_wavefile(filename: str, waveform: np.ndarray, sample_rate: int = 44100) -> None:
-        """
-        Save the waveform to a WAV file.
-
-        :param filename: Name of the file to save the waveform to.
-        :param waveform: Numpy array containing the waveform to be saved.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        """
-        waveform = np.int16(waveform * 32767)
-        wavfile.write(filename, sample_rate, waveform)
-
-    @staticmethod
-    def generate_melody(notes: list[str], duration: float, wave_type: str = 'sine', sample_rate: int = 44100) -> np.ndarray:
-        """
-        Generate a melody from a list of notes.
-
-        :param notes: List of musical notes in the format 'NoteOctave' (e.g., ['A4', 'C#5']).
-        :param duration: Duration of each note in seconds.
-        :param wave_type: Type of waveform ('sine', 'square', 'triangle', 'sawtooth'). Default is 'sine'.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the generated melody.
-        """
-        melody = np.concatenate([ModifyAudio.create_note_wave(note, duration, wave_type, sample_rate) for note in notes])
+    def generate_random_melody(num_notes: int = 10, min_freq: float = 261.63, max_freq: float = 523.25, duration: float = 0.5, sample_rate: int = 44100) -> np.ndarray:
+        melody = np.array([])
+        for _ in range(num_notes):
+            frequency = random.uniform(min_freq, max_freq)
+            note = ModifyAudio.generate_sine_wave(frequency, duration, sample_rate)
+            melody = np.concatenate((melody, note))
         return melody
 
     @staticmethod
-    def generate_bassline(notes: list[str], duration: float, wave_type: str = 'sine', sample_rate: int = 44100) -> np.ndarray:
-        """
-        Generate a bassline from a list of notes.
-
-        :param notes: List of musical notes in the format 'NoteOctave' (e.g., ['E2', 'G#2']).
-        :param duration: Duration of each note in seconds.
-        :param wave_type: Type of waveform ('sine', 'square', 'triangle', 'sawtooth'). Default is 'sine'.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the generated bassline.
-        """
-        bassline = np.concatenate([ModifyAudio.create_note_wave(note, duration, wave_type, sample_rate) for note in notes])
+    def generate_random_bassline(num_notes: int = 10, min_freq: float = 41.20, max_freq: float = 82.41, duration: float = 0.5, sample_rate: int = 44100) -> np.ndarray:
+        bassline = np.array([])
+        for _ in range(num_notes):
+            frequency = random.uniform(min_freq, max_freq)
+            note = ModifyAudio.generate_sine_wave(frequency, duration, sample_rate)
+            bassline = np.concatenate((bassline, note))
         return bassline
     
 
-    @staticmethod
-    def create_note_wave(note: str, duration: float, wave_type: str = 'sine', sample_rate: int = 44100) -> np.ndarray:
-        """
-        Create a waveform for a single note.
-
-        :param note: Musical note in the format 'NoteOctave' (e.g., 'A4', 'C#5').
-        :param duration: Duration of the note in seconds.
-        :param wave_type: Type of waveform ('sine', 'square', 'triangle', 'sawtooth'). Default is 'sine'.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the waveform for the note.
-        :raises ValueError: If the wave_type is not recognized.
-        """
-        frequency = ModifyAudio.note_to_frequency(note)
-        if wave_type == 'sine':
-            waveform = ModifyAudio.generate_sine_wave(frequency, duration, sample_rate)
-        elif wave_type == 'square':
-            waveform = ModifyAudio.generate_square_wave(frequency, duration, sample_rate)
-        elif wave_type == 'triangle':
-            waveform = ModifyAudio.generate_triangle_wave(frequency, duration, sample_rate)
-        elif wave_type == 'sawtooth':
-            waveform = ModifyAudio.generate_sawtooth_wave(frequency, duration, sample_rate)
-        else:
-            raise ValueError(f"Wave type '{wave_type}' is not recognized.")
-        return waveform
-
-    @staticmethod
-    def save_wavefile(filename: str, waveform: np.ndarray, sample_rate: int = 44100) -> None:
-        """
-        Save the waveform to a WAV file.
-
-        :param filename: Name of the file to save the waveform to.
-        :param waveform: Numpy array containing the waveform to be saved.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        """
-        waveform = np.int16(waveform * 32767)
-        wavfile.write(filename, sample_rate, waveform)
-
-    @staticmethod
-    def generate_melody(notes: list[str], duration: float, wave_type: str = 'sine', sample_rate: int = 44100) -> np.ndarray:
-        """
-        Generate a melody from a list of notes.
-
-        :param notes: List of musical notes in the format 'NoteOctave' (e.g., ['A4', 'C#5']).
-        :param duration: Duration of each note in seconds.
-        :param wave_type: Type of waveform ('sine', 'square', 'triangle', 'sawtooth'). Default is 'sine'.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the generated melody.
-        """
-        melody = np.concatenate([ModifyAudio.create_note_wave(note, duration, wave_type, sample_rate) for note in notes])
-        return melody
-
-    @staticmethod
-    def generate_bassline(notes: list[str], duration: float, wave_type: str = 'sine', sample_rate: int = 44100) -> np.ndarray:
-        """
-        Generate a bassline from a list of notes.
-
-        :param notes: List of musical notes in the format 'NoteOctave' (e.g., ['E2', 'G#2']).
-        :param duration: Duration of each note in seconds.
-        :param wave_type: Type of waveform ('sine', 'square', 'triangle', 'sawtooth'). Default is 'sine'.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Numpy array containing the generated bassline.
-        """
-        bassline = np.concatenate([ModifyAudio.create_note_wave(note, duration, wave_type, sample_rate) for note in notes])
-        return bassline
     
-
-    @staticmethod
-    def apply_reverb(audio: np.ndarray, reverb_amount: float = 0.5, sample_rate: int = 44100) -> np.ndarray:
-        """
-        Apply reverb effect to an audio signal.
-
-        :param audio: Input audio waveform as a numpy array.
-        :param reverb_amount: Amount of reverb to apply (0.0 to 1.0). Default is 0.5.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Audio waveform with reverb applied.
-        """
-        decay = reverb_amount * np.arange(len(audio)) / sample_rate
-        reverb_signal = np.convolve(audio, decay, mode='full')[:len(audio)]
-        return audio + reverb_signal
-
     @staticmethod
     def save_wavefile(filename: str, audio: np.ndarray, sample_rate: int = 44100) -> None:
         """
