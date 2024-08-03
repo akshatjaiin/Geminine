@@ -7,7 +7,7 @@ piano.record_chord([(52, 56, 61)], duration=0.3)  # C5 E5 A5
 piano.play()
 piano.close()   # Terminates PyAudio
 
-guitar = Instrument(44100)
+guitar = ModifyAudio(44100)
 guitar.record_key(43, duration=3)  # A
 guitar.play()
 guitar.clear_sample()  # clears the sample
