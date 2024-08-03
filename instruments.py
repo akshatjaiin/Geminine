@@ -337,7 +337,129 @@ class modify_audio:
         return drum_track
 
     # --- Mixing and Saving ---
+    def apply_reverb(waveform, reverb_amount=0.3, sample_rate=44100):
+        """
+        Applies a simple reverb effect by adding a delayed and attenuated copy of the waveform to itself.
 
+        :param waveform: The input waveform.
+        :param reverb_amount: The amount of reverb to apply (0 to 1).
+        :param sample_rate: The sample rate of the audio.
+        :return: Waveform with reverb applied.
+        """
+        delay_samples = int(0.03 * sample_rate)  # 30ms delay
+        reverb_wave = np.zeros_like(waveform)
+        reverb_wave[delay_samples:] = waveform[:-delay_samples] * reverb_amount
+        return np.clip(waveform + reverb_wave, -1, 1)
+
+    def apply_echo(waveform, delay=0.2, decay=0.5, sample_rate=44100):
+        """
+        Adds an echo effect by delaying the original waveform and adding it back to the signal.
+
+        :param waveform: The input waveform.
+        :param delay: The delay of the echo in seconds.
+        :param decay: The decay factor for the echo (0 to 1).
+        :param sample_rate: The sample rate of the audio.
+        :return: Waveform with echo applied.
+        """
+        delay_samples = int(sample_rate * delay)
+        echo_wave = np.zeros_like(waveform)
+        echo_wave[delay_samples:] = waveform[:-delay_samples] * decay
+        return np.clip(waveform + echo_wave, -1, 1)
+
+    # --- Advanced Audio Manipulation ---
+
+    def pitch_shift(waveform, semitones, sample_rate=44100):
+        """
+        Shifts the pitch of the waveform by a specified number of semitones.
+
+        :param waveform: The input waveform.
+        :param semitones: The number of semitones to shift (positive or negative).
+        :param sample_rate: The sample rate of the audio.
+        :return: Pitch-shifted waveform.
+        """
+        factor = 2 ** (semitones / 12.0)
+        indices = np.round(np.arange(0, len(waveform), factor))
+        indices = indices[indices < len(waveform)].astype(int)
+        return waveform[indices]
+
+    def time_stretch(waveform, stretch_factor, sample_rate=44100):
+        """
+        Stretches or compresses the time of the waveform.
+
+        :param waveform: The input waveform.
+        :param stretch_factor: The factor by which to stretch or compress the time (greater than 1 stretches, less than 1 compresses).
+        :param sample_rate: The sample rate of the audio.
+        :return: Time-stretched waveform.
+        """
+        indices = np.round(np.arange(0, len(waveform), 1/stretch_factor))
+        indices = indices[indices < len(waveform)].astype(int)
+        return waveform[indices]
+
+    # --- Exporting to Different Formats ---
+
+    def export_to_mp3(filename, waveform, sample_rate=44100, bitrate="192k"):
+        """
+        Exports the waveform to an MP3 file using pydub.
+
+        :param filename: The name of the file to save.
+        :param waveform: The waveform data to save.
+        :param sample_rate: The sample rate of the audio.
+        :param bitrate: The bitrate of the MP3 file.
+        :return: None
+        """
+        audio_segment = numpy_to_pydub(waveform, sample_rate)
+        audio_segment.export(filename, format="mp3", bitrate=bitrate)
+
+    def export_to_flac(filename, waveform, sample_rate=44100):
+        """
+        Exports the waveform to a FLAC file.
+
+        :param filename: The name of the file to save.
+        :param waveform: The waveform data to save.
+        :param sample_rate: The sample rate of the audio.
+        :return: None
+        """
+        audio_segment = numpy_to_pydub(waveform, sample_rate)
+        audio_segment.export(filename, format="flac")
+
+    def export_to_ogg(filename, waveform, sample_rate=44100, quality=5):
+        """
+        Exports the waveform to an OGG file.
+
+        :param filename: The name of the file to save.
+        :param waveform: The waveform data to save.
+        :param sample_rate: The sample rate of the audio.
+        :param quality: The quality level of the OGG file (0 to 10).
+        :return: None
+        """
+        audio_segment = numpy_to_pydub(waveform, sample_rate)
+        audio_segment.export(filename, format="ogg", quality=quality)
+
+    # --- Utilities ---
+
+    def combine_tracks(track1, track2, sample_rate=44100):
+        """
+        Combines two waveforms into one by averaging their values.
+
+        :param track1: The first waveform.
+        :param track2: The second waveform.
+        :param sample_rate: The sample rate of the audio.
+        :return: Combined waveform.
+        """
+        combined = track1 + track2
+        return np.clip(combined / np.max(np.abs(combined)), -1, 1)
+
+    def add_silence(waveform, duration, sample_rate=44100):
+        """
+        Adds silence to the beginning or end of the waveform.
+
+        :param waveform: The input waveform.
+        :param duration: Duration of silence in seconds.
+        :param sample_rate: The sample rate of the audio.
+        :return: Waveform with added silence.
+        """
+        silence = np.zeros(int(sample_rate * duration))
+        return np.concatenate((silence, waveform, silence))
     def mix_tracks_pydub(*tracks):
         combined = tracks[0]
         for track in tracks[1:]:
