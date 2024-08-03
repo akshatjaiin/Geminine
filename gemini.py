@@ -2,8 +2,13 @@ import os
 import google.generativeai as genai
 from dotenv import load_dotenv
 from instruments import Instrument
+import requests
+import json
+
 load_dotenv() 
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+api_key = os.environ["GEMINI_API_KEY"]
+genai.configure(api_key=api_key)
+
 
 
 function_dict = {
@@ -104,37 +109,26 @@ function_dict = {
         "args": ["tracks"],
     },
 }
-def generate_function_call(instruction: str):
-    """
-    Generates a Python function call from a natural language instruction.
-    """
-    payload = {
-        "model": "text-davinci-003",
-        "prompt": f"You are a function caller. Your job is to use functions in the Instrument library.\n You have access to these functions: {function_dict.keys()}\n Generate a Python function call based on this instruction: {instruction}",
-        "max_tokens": 100,
-        "temperature": 0.7,  
-    }
 
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
-    command = response.json()["choices"][0]["text"]  
-    return command
 
-def execute_function_call(function_call: str):
-    """
-    Safely executes a Python function call in Windows.
-    """
-    try:
-        locals_dict = {"Instrument": Instrument, **function_dict}
-        exec(function_call, globals(), locals_dict)
-    except Exception as e:
-        print(f"Error executing command: {e}")
+prompt = "Create  a melody for mario bros in 5 second"
 
-# --- Example Usage ---
+model = genai.GenerativeModel('gemini-1.5-flash')
+response = model.generate_content(
+    prompt,
+    tools=[{
+        'function_declarations': [function_dict],
+    }],
+)
 
-instruction = "Generate a melody using the generate_melody function. Use notes C4, D4, E4, and a sine wave. Make the duration of each note 0.5 seconds and save it to a file name gem.wav"
+function_call = response.candidates[0].content.parts[0].function_call
+args = function_call.args
+function_name = function_call.name
 
-function_call = generate_function_call(instruction) 
 
-print(f"Generated function call: {function_call}")
 
-execute_function_call(function_call)
+
+response = model.generate_content(
+    "Based on this information i created a file respond to the student in a friendly manner.",
+)
+print(response.text)
