@@ -546,25 +546,6 @@ class Instrument:
         bassline = ModifyAudio.generate_bassline(bassline_notes, note_duration, wave_type, sample_rate)
         return bassline
 
-    @staticmethod
-    def generate_random_drum_pattern(length: int, note_duration: float, sample_rate: int = 44100) -> np.ndarray:
-        """
-        Generate a random drum pattern.
-
-        :param length: Number of beats in the pattern.
-        :param note_duration: Duration of each beat in seconds.
-        :param sample_rate: Number of samples per second (Hz). Default is 44100.
-        :return: Drum track waveform as a numpy array.
-        """
-        drum_pattern = []
-        for _ in range(length):
-            hit_time = random.uniform(0, note_duration)
-            hit_duration = random.uniform(0.05, 0.15)
-            frequency = random.uniform(100, 300)
-            drum_pattern.append((hit_time, hit_duration, frequency))
-        drum_track = ModifyAudio.generate_drum_pattern(drum_pattern, length * note_duration, sample_rate)
-        return drum_track
-    
     # --- Mixing and Saving ---
     def apply_reverb(waveform, reverb_amount=0.3, sample_rate=44100):
         """
@@ -733,6 +714,7 @@ class Instrument:
 
     @staticmethod
     def mix_tracks_pydub(*tracks: AudioSegment) -> AudioSegment:
+
         """
         Mixes multiple tracks together using PyDub's overlay method.
 
@@ -743,3 +725,16 @@ class Instrument:
         for track in tracks[1:]:
             combined = combined.overlay(track)
         return combined
+    
+    @staticmethod
+    def export_to_wav(self, filename: str, waveform: np.ndarray, sample_rate: int = 44100) -> None:
+        """
+        Exports the waveform to a WAV file using PyDub.
+
+        :param filename: The name of the file to save.
+        :param waveform: The waveform data to save.
+        :param sample_rate: The sample rate of the audio. Default is 44100.
+        :return: None
+        """
+        audio_segment = self.numpy_to_pydub(waveform, sample_rate)
+        audio_segment.export(filename, format="wav")

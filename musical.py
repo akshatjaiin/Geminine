@@ -36,7 +36,7 @@ def create_random_song(instrument: Instrument, melody_length: int, melody_durati
     # Export the song
     sample_rate = 44100
     filename = 'rando1.mp3'
-    Instrument.export_to_mp3(filename, instrument.sample, sample_rate)
+    Instrument.to_wav(filename)
     print(f"Song saved to {filename}")
 
 # Example usage
